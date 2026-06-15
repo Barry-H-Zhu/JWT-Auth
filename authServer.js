@@ -8,6 +8,13 @@ const db = require('./db');
 const bcrypt = require('bcrypt');
 
 app.use(express.json());
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
+    next();
+});
 
 let refreshTokens = [];
 
@@ -18,7 +25,7 @@ app.post('/token', (req, res) => {
 
     jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET, (err, user) => {
         if (err) return res.sendStatus(403);
-        const accessToken = generateAccessToken({ name: user.name });
+        const accessToken = generateAccessToken({ id: user.id, name: user.name });
         res.json({ accessToken: accessToken });
     });
 });
@@ -55,9 +62,12 @@ app.post('/login', async (req, res) => {
             return res.status(401).json({ message: 'Invalid username or password' });
         }
 
-        const user = { name: username };
+        const user = { 
+            id: userRecord.id,
+            name: userRecord.username
+        };
 
-        const accessToken = generateAccessToken(user);
+        const accessToken = generateAccessToken({ id: user.id, name: user.name });
         const refreshToken = jwt.sign(user, process.env.REFRESH_TOKEN_SECRET);
         refreshTokens.push(refreshToken);
         res.json({ accessToken: accessToken, refreshToken: refreshToken });

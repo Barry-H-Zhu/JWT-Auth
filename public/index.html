@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JWT Auth Tester</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">JWT Auth Demo</p>
+        <h1>Auth Test Console</h1>
+      </div>
+      <span id="loginState" class="status-pill">Signed out</span>
+    </header>
+
+    <section class="layout">
+      <section class="panel login-panel" aria-labelledby="loginTitle">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Login</p>
+            <h2 id="loginTitle">Credentials</h2>
+          </div>
+          <button id="clearBtn" class="icon-button" type="button" title="Clear tokens">
+            <span aria-hidden="true">x</span>
+          </button>
+        </div>
+
+        <form id="loginForm" class="form-grid">
+          <label>
+            <span>Username</span>
+            <input id="username" name="username" type="text" value="Barry" autocomplete="username" required>
+          </label>
+          <label>
+            <span>Password</span>
+            <input id="password" name="password" type="password" value="password123" autocomplete="current-password" required>
+          </label>
+          <button class="primary-button" type="submit">Login</button>
+        </form>
+      </section>
+
+      <section class="panel actions-panel" aria-labelledby="actionsTitle">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Actions</p>
+            <h2 id="actionsTitle">API Requests</h2>
+          </div>
+        </div>
+        <div class="action-grid">
+          <button id="postsBtn" class="secondary-button" type="button">GET /posts</button>
+          <button id="refreshBtn" class="secondary-button" type="button">Refresh token</button>
+          <button id="logoutBtn" class="danger-button" type="button">Logout</button>
+        </div>
+      </section>
+
+      <section class="panel token-panel" aria-labelledby="tokenTitle">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Tokens</p>
+            <h2 id="tokenTitle">Current JWTs</h2>
+          </div>
+        </div>
+        <div class="token-list">
+          <label>
+            <span>Access Token</span>
+            <textarea id="accessToken" rows="3" spellcheck="false" readonly></textarea>
+          </label>
+          <label>
+            <span>Refresh Token</span>
+            <textarea id="refreshToken" rows="3" spellcheck="false" readonly></textarea>
+          </label>
+        </div>
+      </section>
+
+      <section class="panel output-panel" aria-labelledby="outputTitle">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Response</p>
+            <h2 id="outputTitle">Server Output</h2>
+          </div>
+          <span id="lastRequest" class="request-label">Idle</span>
+        </div>
+        <pre id="output">Login first, then test the protected route.</pre>
+      </section>
+    </section>
+  </main>
+  <script src="./app.js"></script>
+</body>
+</html>
