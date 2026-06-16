@@ -3,32 +3,28 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>JWT Auth Tester</title>
+  <title>JWT Social Demo</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-  <main class="app-shell">
-    <header class="topbar">
-      <div>
-        <p class="eyebrow">JWT Auth Demo</p>
-        <h1>Auth Test Console</h1>
+  <main>
+    <section id="authView" class="auth-view">
+      <div class="auth-copy">
+        <p class="eyebrow">JWT Social Demo</p>
+        <h1>Post, refresh, delete. All behind your token.</h1>
+        <p class="lead">Sign in to see only your own posts and test the full auth flow like a small social feed.</p>
       </div>
-      <span id="loginState" class="status-pill">Signed out</span>
-    </header>
 
-    <section class="layout">
-      <section class="panel login-panel" aria-labelledby="loginTitle">
-        <div class="panel-heading">
+      <section class="auth-card" aria-labelledby="authTitle">
+        <div class="section-heading">
           <div>
-            <p class="eyebrow">Login</p>
-            <h2 id="loginTitle">Credentials</h2>
+            <p class="eyebrow">Account</p>
+            <h2 id="authTitle">Welcome back</h2>
           </div>
-          <button id="clearBtn" class="icon-button" type="button" title="Clear tokens">
-            <span aria-hidden="true">x</span>
-          </button>
+          <span id="authState" class="status-pill">Signed out</span>
         </div>
 
-        <form id="loginForm" class="form-grid">
+        <form id="loginForm" class="auth-form">
           <label>
             <span>Username</span>
             <input id="username" name="username" type="text" value="Barry" autocomplete="username" required>
@@ -37,70 +33,77 @@
             <span>Password</span>
             <input id="password" name="password" type="password" value="password123" autocomplete="current-password" required>
           </label>
-          <div class="auth-actions">
-            <button id="registerBtn" class="secondary-button" type="button">Register</button>
-            <button class="primary-button" type="submit">Login</button>
+          <div class="button-row">
+            <button id="registerBtn" class="secondary-button" type="button">Create account</button>
+            <button class="primary-button" type="submit">Sign in</button>
           </div>
         </form>
-      </section>
 
-      <section class="panel actions-panel" aria-labelledby="actionsTitle">
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">Actions</p>
-            <h2 id="actionsTitle">API Requests</h2>
+        <p id="authMessage" class="message">Use an existing account, or create a new one with the same form.</p>
+      </section>
+    </section>
+
+    <section id="appView" class="app-view" hidden>
+      <aside class="sidebar">
+        <div>
+          <p class="eyebrow">Signed in as</p>
+          <div class="profile-block">
+            <div id="userAvatar" class="avatar">U</div>
+            <div>
+              <h2 id="currentUser">User</h2>
+              <p id="userMeta">Private feed</p>
+            </div>
           </div>
         </div>
-        <div class="action-grid">
-          <button id="postsBtn" class="secondary-button" type="button">GET /posts</button>
-          <button id="createPostBtn" class="secondary-button" type="button">Create post</button>
-          <button id="deletePostBtn" class="danger-button" type="button">Delete post</button>
+
+        <nav class="sidebar-actions" aria-label="Session actions">
           <button id="refreshBtn" class="secondary-button" type="button">Refresh token</button>
+          <button id="clearBtn" class="secondary-button" type="button">Clear local tokens</button>
           <button id="logoutBtn" class="danger-button" type="button">Logout</button>
-        </div>
-        <div class="post-fields">
-          <label>
-            <span>Post Title</span>
-            <input id="postTitle" name="postTitle" type="text" value="My Post from UI">
-          </label>
-          <label>
-            <span>Post ID</span>
-            <input id="postId" name="postId" type="number" min="1" placeholder="ID to delete">
-          </label>
-        </div>
-      </section>
+        </nav>
 
-      <section class="panel token-panel" aria-labelledby="tokenTitle">
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">Tokens</p>
-            <h2 id="tokenTitle">Current JWTs</h2>
-          </div>
-        </div>
-        <div class="token-list">
+        <details class="debug-panel">
+          <summary>Token debug</summary>
           <label>
             <span>Access Token</span>
-            <textarea id="accessToken" rows="3" spellcheck="false" readonly></textarea>
+            <textarea id="accessToken" rows="4" spellcheck="false" readonly></textarea>
           </label>
           <label>
             <span>Refresh Token</span>
-            <textarea id="refreshToken" rows="3" spellcheck="false" readonly></textarea>
+            <textarea id="refreshToken" rows="4" spellcheck="false" readonly></textarea>
           </label>
-        </div>
-      </section>
+        </details>
+      </aside>
 
-      <section class="panel output-panel" aria-labelledby="outputTitle">
-        <div class="panel-heading">
+      <section class="feed-shell">
+        <header class="feed-header">
           <div>
-            <p class="eyebrow">Response</p>
-            <h2 id="outputTitle">Server Output</h2>
+            <p class="eyebrow">My posts</p>
+            <h1>Home feed</h1>
           </div>
-          <span id="lastRequest" class="request-label">Idle</span>
-        </div>
-        <pre id="output">Login first, then test the protected route.</pre>
+          <button id="postsBtn" class="secondary-button" type="button">Reload</button>
+        </header>
+
+        <section class="composer" aria-labelledby="composerTitle">
+          <h2 id="composerTitle" class="sr-only">Create a post</h2>
+          <div class="composer-avatar" id="composerAvatar">U</div>
+          <form id="postForm" class="composer-form">
+            <label for="postTitle" class="sr-only">Post content</label>
+            <textarea id="postTitle" name="postTitle" rows="3" placeholder="Share something from this account..." required></textarea>
+            <div class="composer-actions">
+              <span id="composerHint">Posts are saved for the signed-in user only.</span>
+              <button id="createPostBtn" class="primary-button" type="submit">Post</button>
+            </div>
+          </form>
+        </section>
+
+        <div id="notice" class="notice" role="status" aria-live="polite"></div>
+
+        <section id="postsList" class="posts-list" aria-label="Posts"></section>
       </section>
     </section>
   </main>
+
   <script src="./app.js"></script>
 </body>
 </html>
