@@ -11,12 +11,14 @@ const passwordInput = document.querySelector('#password');
 const accessTokenInput = document.querySelector('#accessToken');
 const refreshTokenInput = document.querySelector('#refreshToken');
 const postTitleInput = document.querySelector('#postTitle');
+const postIdInput = document.querySelector('#postId');
 const output = document.querySelector('#output');
 const lastRequest = document.querySelector('#lastRequest');
 const loginState = document.querySelector('#loginState');
 const registerBtn = document.querySelector('#registerBtn');
 const postsBtn = document.querySelector('#postsBtn');
 const createPostBtn = document.querySelector('#createPostBtn');
+const deletePostBtn = document.querySelector('#deletePostBtn');
 const refreshBtn = document.querySelector('#refreshBtn');
 const logoutBtn = document.querySelector('#logoutBtn');
 const clearBtn = document.querySelector('#clearBtn');
@@ -122,7 +124,7 @@ postsBtn.addEventListener('click', async () => {
 createPostBtn.addEventListener('click', async () => {
   const { accessToken } = getTokens();
 
-  await requestJson('POST /posts', `${resourceBaseUrl}/posts`, {
+  const data = await requestJson('POST /posts', `${resourceBaseUrl}/posts`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -131,6 +133,22 @@ createPostBtn.addEventListener('click', async () => {
     body: JSON.stringify({
       title: postTitleInput.value.trim(),
     }),
+  });
+
+  if (data.id !== undefined) {
+    postIdInput.value = data.id;
+  }
+});
+
+deletePostBtn.addEventListener('click', async () => {
+  const { accessToken } = getTokens();
+  const postId = postIdInput.value.trim();
+
+  await requestJson('DELETE /posts/:id', `${resourceBaseUrl}/posts/${postId}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
   });
 });
 

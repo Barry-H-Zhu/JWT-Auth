@@ -16,17 +16,6 @@ app.use((req, res, next) => {
     next();
 });
 
-// const posts = [
-//     {
-//         username: 'Barry',
-//         title: 'My First Post'
-//     },
-//     {
-//         username: 'Wenqi',
-//         title: 'My Second Post'
-//     }
-// ];
-
 app.post('/posts', authenticateToken, async (req, res) => {
     const { title } = req.body;
 
@@ -48,6 +37,26 @@ app.post('/posts', authenticateToken, async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: 'Could not create post' });
+    }
+});
+
+app.delete('/posts/:id', authenticateToken, async (req, res) => {
+    const postId = req.params.id;
+
+    try {
+        const [result] = await db.execute(
+            'DELETE FROM posts WHERE id = ? AND user_id = ?',
+            [postId, req.user.id]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'Post not found' });
+        }
+
+        res.sendStatus(204);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Could not delete post' });
     }
 });
 

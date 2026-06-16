@@ -190,11 +190,14 @@ textarea {
 
 .action-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
 }
 
-.post-title-field {
+.post-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 0.34fr);
+  gap: 8px;
   margin-top: 8px;
 }
 
@@ -296,6 +299,7 @@ pre {
 
   .login-panel .form-grid,
   .auth-actions,
+  .post-fields,
   .action-grid {
     grid-template-columns: 1fr;
   }

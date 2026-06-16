@@ -38,6 +38,13 @@ Content-Type: application/json
 
 ###
 
+@postId = paste_post_id_here
+
+DELETE http://localhost:3000/posts/{{postId}}
+Authorization: Bearer {{accessToken}}
+
+###
+
 POST http://localhost:4000/token
 Content-Type: application/json
 

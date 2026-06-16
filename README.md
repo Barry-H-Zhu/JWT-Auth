@@ -7,7 +7,7 @@ The app is split into two servers:
 - `server.js`: resource server on port `3000`
 - `authServer.js`: authentication server on port `4000`
 
-The auth server registers and logs in users from MySQL. The resource server reads and creates posts in MySQL using the authenticated user's JWT payload.
+The auth server registers and logs in users from MySQL. The resource server reads, creates, and deletes posts in MySQL using the authenticated user's JWT payload.
 
 ## Features
 
@@ -16,12 +16,13 @@ The auth server registers and logs in users from MySQL. The resource server read
 - Store password hashes with bcrypt
 - Generate access tokens and refresh tokens
 - Include `id` and `name` in JWT payloads
-- Protect `GET /posts` and `POST /posts` with JWT middleware
+- Protect `GET /posts`, `POST /posts`, and `DELETE /posts/:id` with JWT middleware
 - Create posts for the currently logged-in user
+- Delete posts owned by the currently logged-in user
 - Refresh expired access tokens with a refresh token
 - Logout by invalidating the refresh token in memory
 - Test APIs with `requests.rest`
-- Test registration, login, posts, refresh, and logout in a browser UI
+- Test registration, login, post creation/deletion, refresh, and logout in a browser UI
 
 ## Project Structure
 
@@ -137,6 +138,7 @@ Use the UI to:
 - view the current access token and refresh token
 - fetch the logged-in user's posts
 - create a post title for the logged-in user
+- delete a post by id
 - refresh the access token
 - log out
 - clear locally saved tokens
@@ -235,6 +237,27 @@ Returns:
 
 The client does not send `user_id`. The server gets it from `req.user.id`, which comes from the verified access token.
 
+### Delete Post
+
+```http
+DELETE http://localhost:3000/posts/<postId>
+Authorization: Bearer <accessToken>
+```
+
+Returns:
+
+```http
+204 No Content
+```
+
+The delete query checks both the post id and the current user's id:
+
+```sql
+DELETE FROM posts WHERE id = ? AND user_id = ?
+```
+
+This prevents one user from deleting another user's post. If the post does not exist or does not belong to the logged-in user, the server returns `404 Not Found`.
+
 ### Refresh Access Token
 
 ```http
@@ -294,15 +317,18 @@ Use `requests.rest` with the VS Code REST Client extension:
 5. Run `GET /posts`.
 6. Run `POST /posts` to create a post.
 7. Run `GET /posts` again to see the new post.
-8. Run `POST /token` to refresh the access token.
-9. Run `DELETE /logout`.
-10. Try `POST /token` again and expect `403 Forbidden`.
+8. Copy a post id into `@postId`.
+9. Run `DELETE /posts/{{postId}}` to delete that post.
+10. Run `POST /token` to refresh the access token.
+11. Run `DELETE /logout`.
+12. Try `POST /token` again and expect `403 Forbidden`.
 
 Do not commit real tokens. Keep placeholders like:
 
 ```http
 @accessToken = paste_access_token_here
 @refreshToken = paste_refresh_token_here
+@postId = paste_post_id_here
 ```
 
 ## Notes
