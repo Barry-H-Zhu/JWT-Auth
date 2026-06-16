@@ -37,7 +37,10 @@
             <span>Password</span>
             <input id="password" name="password" type="password" value="password123" autocomplete="current-password" required>
           </label>
-          <button class="primary-button" type="submit">Login</button>
+          <div class="auth-actions">
+            <button id="registerBtn" class="secondary-button" type="button">Register</button>
+            <button class="primary-button" type="submit">Login</button>
+          </div>
         </form>
       </section>
 
@@ -50,9 +53,14 @@
         </div>
         <div class="action-grid">
           <button id="postsBtn" class="secondary-button" type="button">GET /posts</button>
+          <button id="createPostBtn" class="secondary-button" type="button">Create post</button>
           <button id="refreshBtn" class="secondary-button" type="button">Refresh token</button>
           <button id="logoutBtn" class="danger-button" type="button">Logout</button>
         </div>
+        <label class="post-title-field">
+          <span>Post Title</span>
+          <input id="postTitle" name="postTitle" type="text" value="My Post from UI">
+        </label>
       </section>
 
       <section class="panel token-panel" aria-labelledby="tokenTitle">

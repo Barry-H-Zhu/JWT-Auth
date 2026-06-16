@@ -10,10 +10,13 @@ const usernameInput = document.querySelector('#username');
 const passwordInput = document.querySelector('#password');
 const accessTokenInput = document.querySelector('#accessToken');
 const refreshTokenInput = document.querySelector('#refreshToken');
+const postTitleInput = document.querySelector('#postTitle');
 const output = document.querySelector('#output');
 const lastRequest = document.querySelector('#lastRequest');
 const loginState = document.querySelector('#loginState');
+const registerBtn = document.querySelector('#registerBtn');
 const postsBtn = document.querySelector('#postsBtn');
+const createPostBtn = document.querySelector('#createPostBtn');
 const refreshBtn = document.querySelector('#refreshBtn');
 const logoutBtn = document.querySelector('#logoutBtn');
 const clearBtn = document.querySelector('#clearBtn');
@@ -95,6 +98,17 @@ loginForm.addEventListener('submit', async (event) => {
   });
 });
 
+registerBtn.addEventListener('click', async () => {
+  await requestJson('POST /register', `${authBaseUrl}/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: usernameInput.value.trim(),
+      password: passwordInput.value,
+    }),
+  });
+});
+
 postsBtn.addEventListener('click', async () => {
   const { accessToken } = getTokens();
 
@@ -102,6 +116,21 @@ postsBtn.addEventListener('click', async () => {
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
+  });
+});
+
+createPostBtn.addEventListener('click', async () => {
+  const { accessToken } = getTokens();
+
+  await requestJson('POST /posts', `${resourceBaseUrl}/posts`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      title: postTitleInput.value.trim(),
+    }),
   });
 });
 

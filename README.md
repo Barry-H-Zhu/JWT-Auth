@@ -1,33 +1,34 @@
 # JWT Auth Demo
 
-A small Node.js and Express project for learning JWT authentication with a real MySQL-backed login flow.
+A small Node.js and Express project for learning JWT authentication with MySQL, bcrypt password hashing, refresh tokens, and protected post routes.
 
 The app is split into two servers:
 
 - `server.js`: resource server on port `3000`
 - `authServer.js`: authentication server on port `4000`
 
-The auth server verifies users from MySQL with `username` and `password`, stores password hashes with bcrypt, and issues JWT access and refresh tokens.
+The auth server registers and logs in users from MySQL. The resource server reads and creates posts in MySQL using the authenticated user's JWT payload.
 
 ## Features
 
-- Login with `username` and `password`
-- Store users in MySQL
+- Register users with `username` and `password`
+- Store users and posts in MySQL
 - Store password hashes with bcrypt
 - Generate access tokens and refresh tokens
 - Include `id` and `name` in JWT payloads
-- Protect `/posts` with JWT middleware
+- Protect `GET /posts` and `POST /posts` with JWT middleware
+- Create posts for the currently logged-in user
 - Refresh expired access tokens with a refresh token
 - Logout by invalidating the refresh token in memory
 - Test APIs with `requests.rest`
-- Test the flow in a browser UI served from `public/`
+- Test registration, login, posts, refresh, and logout in a browser UI
 
 ## Project Structure
 
 ```text
 .
-|-- authServer.js       # Login, token refresh, logout
-|-- server.js           # Protected posts route and static UI hosting
+|-- authServer.js       # Register, login, token refresh, logout
+|-- server.js           # Protected post routes and static UI hosting
 |-- db.js               # MySQL connection pool
 |-- public/             # Browser auth test UI
 |   |-- index.html
@@ -69,13 +70,17 @@ Do not commit `.env`. It is ignored by Git.
 
 ## MySQL Setup
 
-Create the database and users table:
+Create the database:
 
 ```sql
 CREATE DATABASE IF NOT EXISTS jwt_auth_demo;
 
 USE jwt_auth_demo;
+```
 
+Create the `users` table:
+
+```sql
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
@@ -84,31 +89,19 @@ CREATE TABLE IF NOT EXISTS users (
 );
 ```
 
-The `username` column is unique, so one username maps to one user row. The `id` column is the stable database identifier used inside JWT payloads.
-
-## Create a Test User
-
-Generate a bcrypt hash for a test password:
-
-```bash
-node -e "const bcrypt = require('bcrypt'); bcrypt.hash('password123', 10).then(console.log);"
-```
-
-Insert the user into MySQL:
+Create the `posts` table:
 
 ```sql
-USE jwt_auth_demo;
-
-INSERT INTO users (username, password_hash)
-VALUES ('Barry', '<paste_bcrypt_hash_here>');
+CREATE TABLE IF NOT EXISTS posts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
 ```
 
-Verify:
-
-```sql
-SELECT id, username, LEFT(password_hash, 7) AS hash_prefix, created_at
-FROM users;
-```
+The `username` column is unique, so one username maps to one user row. Posts use `user_id`, which points to `users.id`, so posts stay tied to the same user even if a username changes later.
 
 ## Run the App
 
@@ -139,9 +132,11 @@ http://localhost:3000
 
 Use the UI to:
 
+- register a new user
 - log in
 - view the current access token and refresh token
-- request `GET /posts`
+- fetch the logged-in user's posts
+- create a post title for the logged-in user
 - refresh the access token
 - log out
 - clear locally saved tokens
@@ -149,6 +144,32 @@ Use the UI to:
 The browser stores tokens in `localStorage` for testing convenience.
 
 ## API Endpoints
+
+### Register
+
+```http
+POST http://localhost:4000/register
+Content-Type: application/json
+
+{
+  "username": "Alice",
+  "password": "password123"
+}
+```
+
+Returns:
+
+```json
+{
+  "message": "User registered",
+  "user": {
+    "id": 2,
+    "username": "Alice"
+  }
+}
+```
+
+If the username already exists, the server returns `409 Conflict`.
 
 ### Login
 
@@ -178,7 +199,41 @@ GET http://localhost:3000/posts
 Authorization: Bearer <accessToken>
 ```
 
-Returns posts that belong to the authenticated user.
+Returns posts that belong to the authenticated user:
+
+```json
+[
+  {
+    "id": 1,
+    "title": "My First Post",
+    "created_at": "..."
+  }
+]
+```
+
+### Create Post
+
+```http
+POST http://localhost:3000/posts
+Authorization: Bearer <accessToken>
+Content-Type: application/json
+
+{
+  "title": "My Post from MySQL"
+}
+```
+
+Returns:
+
+```json
+{
+  "id": 2,
+  "title": "My Post from MySQL",
+  "user_id": 1
+}
+```
+
+The client does not send `user_id`. The server gets it from `req.user.id`, which comes from the verified access token.
 
 ### Refresh Access Token
 
@@ -232,13 +287,16 @@ Logout removes the refresh token from the auth server's in-memory token list.
 
 Use `requests.rest` with the VS Code REST Client extension:
 
-1. Run `POST /login`.
-2. Copy the returned `accessToken` into `@accessToken`.
-3. Copy the returned `refreshToken` into `@refreshToken`.
-4. Run `GET /posts`.
-5. Run `POST /token` to refresh the access token.
-6. Run `DELETE /logout`.
-7. Try `POST /token` again and expect `403 Forbidden`.
+1. Run `POST /register` to create a user.
+2. Run `POST /login`.
+3. Copy the returned `accessToken` into `@accessToken`.
+4. Copy the returned `refreshToken` into `@refreshToken`.
+5. Run `GET /posts`.
+6. Run `POST /posts` to create a post.
+7. Run `GET /posts` again to see the new post.
+8. Run `POST /token` to refresh the access token.
+9. Run `DELETE /logout`.
+10. Try `POST /token` again and expect `403 Forbidden`.
 
 Do not commit real tokens. Keep placeholders like:
 
@@ -250,5 +308,6 @@ Do not commit real tokens. Keep placeholders like:
 ## Notes
 
 - Refresh tokens are currently stored in memory, so they disappear when `authServer.js` restarts.
+- Posts are now stored in MySQL, but refresh tokens are not yet stored in MySQL.
 - A production app should store refresh tokens or sessions in a database and support token revocation more carefully.
 - This project is for learning JWT concepts, not production use.

@@ -107,7 +107,7 @@ h2 {
 .layout {
   display: grid;
   grid-template-columns: minmax(280px, 0.82fr) minmax(420px, 1.18fr);
-  grid-template-rows: minmax(128px, auto) minmax(0, calc(100vh - 235px));
+  grid-template-rows: minmax(128px, auto) minmax(0, calc(100vh - 250px));
   gap: 10px;
 }
 
@@ -133,6 +133,12 @@ h2 {
 .login-panel .form-grid {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
   align-items: end;
+}
+
+.auth-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(86px, 1fr));
+  gap: 8px;
 }
 
 label {
@@ -184,8 +190,12 @@ textarea {
 
 .action-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
+}
+
+.post-title-field {
+  margin-top: 8px;
 }
 
 .primary-button,
@@ -285,6 +295,7 @@ pre {
   }
 
   .login-panel .form-grid,
+  .auth-actions,
   .action-grid {
     grid-template-columns: 1fr;
   }

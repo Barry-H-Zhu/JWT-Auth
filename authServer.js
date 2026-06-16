@@ -35,6 +35,38 @@ app.delete('/logout', (req, res) => {
     res.sendStatus(204);
 });
 
+app.post('/register', async (req, res) => {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+        return res.status(400).json({ message: 'username and password are required' });
+    }
+
+    try {
+        const passwordHash = await bcrypt.hash(password, 10);
+
+        const [result] = await db.execute(
+            'INSERT INTO users (username, password_hash) VALUES (?, ?)',
+            [username, passwordHash]
+        );
+
+        res.status(201).json({
+            message: 'User registered',
+            user: {
+                id: result.insertId,
+                username: username
+            }
+        });
+    } catch (err) {
+        if (err.code === 'ER_DUP_ENTRY') {
+            return res.status(409).json({ message: 'Username already exists' });
+        }
+
+        console.error(err);
+        res.status(500).json({ message: 'Could not register user' });
+    }
+});
+
 app.post('/login', async (req, res) => {
     // Authenticate User
 
