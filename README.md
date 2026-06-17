@@ -7,11 +7,12 @@ The app is split into two servers:
 - `server.js`: resource server on port `3000`
 - `authServer.js`: authentication server on port `4000`
 
-The auth server registers and logs in users from MySQL. The resource server reads, creates, and deletes posts in MySQL using the authenticated user's JWT payload.
+The auth server registers users with username, email, and password, then lets users log in with either username or email. The resource server reads, creates, and deletes posts in MySQL using the authenticated user's JWT payload.
 
 ## Features
 
-- Register users with `username` and `password`
+- Register users with `username`, `email`, and `password`
+- Log in with either username or email
 - Store users and posts in MySQL
 - Store password hashes with bcrypt
 - Generate access tokens and refresh tokens
@@ -85,6 +86,7 @@ Create the `users` table:
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
+    email VARCHAR(255) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -102,7 +104,26 @@ CREATE TABLE IF NOT EXISTS posts (
 );
 ```
 
-The `username` column is unique, so one username maps to one user row. Posts use `user_id`, which points to `users.id`, so posts stay tied to the same user even if a username changes later.
+The `username` and `email` columns are unique, so either value can identify one user row. Posts use `user_id`, which points to `users.id`, so posts stay tied to the same user even if a username or email changes later.
+
+If you already created `users` before adding email support, migrate it with:
+
+```sql
+ALTER TABLE users
+ADD COLUMN email VARCHAR(255) NULL AFTER username;
+
+UPDATE users
+SET email = 'barry@example.com'
+WHERE username = 'Barry';
+
+UPDATE users
+SET email = 'wenqi@example.com'
+WHERE username = 'Wenqi';
+
+ALTER TABLE users
+MODIFY email VARCHAR(255) NOT NULL,
+ADD UNIQUE KEY users_email_unique (email);
+```
 
 ## Run the App
 
@@ -134,7 +155,7 @@ http://localhost:3000
 Use the UI to:
 
 - register a new user
-- log in
+- log in with username or email
 - view the current access token and refresh token
 - fetch the logged-in user's posts
 - create a post title for the logged-in user
@@ -155,6 +176,7 @@ Content-Type: application/json
 
 {
   "username": "Alice",
+  "email": "alice@example.com",
   "password": "password123"
 }
 ```
@@ -166,12 +188,13 @@ Returns:
   "message": "User registered",
   "user": {
     "id": 2,
-    "username": "Alice"
+    "username": "Alice",
+    "email": "alice@example.com"
   }
 }
 ```
 
-If the username already exists, the server returns `409 Conflict`.
+If the username or email already exists, the server returns `409 Conflict`.
 
 ### Login
 
@@ -180,7 +203,16 @@ POST http://localhost:4000/login
 Content-Type: application/json
 
 {
-  "username": "Barry",
+  "identifier": "Barry",
+  "password": "password123"
+}
+```
+
+The `identifier` can be either a username or an email:
+
+```json
+{
+  "identifier": "barry@example.com",
   "password": "password123"
 }
 ```
@@ -310,8 +342,8 @@ Logout removes the refresh token from the auth server's in-memory token list.
 
 Use `requests.rest` with the VS Code REST Client extension:
 
-1. Run `POST /register` to create a user.
-2. Run `POST /login`.
+1. Run `POST /register` to create a user with username, email, and password.
+2. Run `POST /login` with either username or email as `identifier`.
 3. Copy the returned `accessToken` into `@accessToken`.
 4. Copy the returned `refreshToken` into `@refreshToken`.
 5. Run `GET /posts`.

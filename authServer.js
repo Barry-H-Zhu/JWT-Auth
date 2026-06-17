@@ -36,30 +36,31 @@ app.delete('/logout', (req, res) => {
 });
 
 app.post('/register', async (req, res) => {
-    const { username, password } = req.body;
+    const { username, email, password } = req.body;
 
-    if (!username || !password) {
-        return res.status(400).json({ message: 'username and password are required' });
+    if (!username || !email || !password) {
+        return res.status(400).json({ message: 'username, email, and password are required' });
     }
 
     try {
         const passwordHash = await bcrypt.hash(password, 10);
 
         const [result] = await db.execute(
-            'INSERT INTO users (username, password_hash) VALUES (?, ?)',
-            [username, passwordHash]
+            'INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)',
+            [username, email, passwordHash]
         );
 
         res.status(201).json({
             message: 'User registered',
             user: {
                 id: result.insertId,
-                username: username
+                username: username,
+                email: email
             }
         });
     } catch (err) {
         if (err.code === 'ER_DUP_ENTRY') {
-            return res.status(409).json({ message: 'Username already exists' });
+            return res.status(409).json({ message: 'Username or email already exists' });
         }
 
         console.error(err);
@@ -70,16 +71,16 @@ app.post('/register', async (req, res) => {
 app.post('/login', async (req, res) => {
     // Authenticate User
 
-    const { username, password } = req.body;
+    const { identifier, password } = req.body;
 
-    if (!username || !password) {
-        return res.status(400).json({ message: 'username and password are required' });
+    if (!identifier || !password) {
+        return res.status(400).json({ message: 'identifier and password are required' });
     }
 
     try {
         const [users] = await db.execute(
-            'SELECT id, username, password_hash FROM users WHERE username = ?',
-            [username]
+            'SELECT id, username, email, password_hash FROM users WHERE username = ? OR email = ?',
+            [identifier, identifier]
         );
 
         const userRecord = users[0];

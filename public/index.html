@@ -24,22 +24,32 @@
           <span id="authState" class="status-pill">Signed out</span>
         </div>
 
-        <form id="loginForm" class="auth-form">
-          <label>
+        <div class="auth-mode" role="tablist" aria-label="Account mode">
+          <button id="signInModeBtn" class="mode-button active" type="button" role="tab" aria-selected="true">Sign in</button>
+          <button id="registerModeBtn" class="mode-button" type="button" role="tab" aria-selected="false">Register</button>
+        </div>
+
+        <form id="authForm" class="auth-form">
+          <label id="identifierField">
+            <span>Username or email</span>
+            <input id="identifier" name="identifier" type="text" value="Barry" autocomplete="username">
+          </label>
+          <label id="usernameField" hidden>
             <span>Username</span>
-            <input id="username" name="username" type="text" value="Barry" autocomplete="username" required>
+            <input id="username" name="username" type="text" autocomplete="username">
+          </label>
+          <label id="emailField" hidden>
+            <span>Email</span>
+            <input id="email" name="email" type="email" autocomplete="email">
           </label>
           <label>
             <span>Password</span>
             <input id="password" name="password" type="password" value="password123" autocomplete="current-password" required>
           </label>
-          <div class="button-row">
-            <button id="registerBtn" class="secondary-button" type="button">Create account</button>
-            <button class="primary-button" type="submit">Sign in</button>
-          </div>
+          <button id="authSubmitBtn" class="primary-button" type="submit">Sign in</button>
         </form>
 
-        <p id="authMessage" class="message">Use an existing account, or create a new one with the same form.</p>
+        <p id="authMessage" class="message">Sign in with either your username or email address.</p>
       </section>
     </section>
 

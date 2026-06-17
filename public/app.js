@@ -7,10 +7,15 @@ const storageKeys = {
 
 const authView = document.querySelector('#authView');
 const appView = document.querySelector('#appView');
-const loginForm = document.querySelector('#loginForm');
+const authForm = document.querySelector('#authForm');
 const postForm = document.querySelector('#postForm');
+const identifierInput = document.querySelector('#identifier');
 const usernameInput = document.querySelector('#username');
+const emailInput = document.querySelector('#email');
 const passwordInput = document.querySelector('#password');
+const identifierField = document.querySelector('#identifierField');
+const usernameField = document.querySelector('#usernameField');
+const emailField = document.querySelector('#emailField');
 const postTitleInput = document.querySelector('#postTitle');
 const accessTokenInput = document.querySelector('#accessToken');
 const refreshTokenInput = document.querySelector('#refreshToken');
@@ -22,7 +27,9 @@ const userMeta = document.querySelector('#userMeta');
 const userAvatar = document.querySelector('#userAvatar');
 const composerAvatar = document.querySelector('#composerAvatar');
 const postsList = document.querySelector('#postsList');
-const registerBtn = document.querySelector('#registerBtn');
+const signInModeBtn = document.querySelector('#signInModeBtn');
+const registerModeBtn = document.querySelector('#registerModeBtn');
+const authSubmitBtn = document.querySelector('#authSubmitBtn');
 const postsBtn = document.querySelector('#postsBtn');
 const createPostBtn = document.querySelector('#createPostBtn');
 const refreshBtn = document.querySelector('#refreshBtn');
@@ -30,6 +37,7 @@ const logoutBtn = document.querySelector('#logoutBtn');
 const clearBtn = document.querySelector('#clearBtn');
 
 let currentPosts = [];
+let authMode = 'sign-in';
 
 function getTokens() {
   return {
@@ -87,6 +95,28 @@ function showAuthMessage(message, isError = false) {
 function showNotice(message, isError = false) {
   notice.textContent = message;
   notice.classList.toggle('error', isError);
+}
+
+function setAuthMode(mode) {
+  authMode = mode;
+  const signingIn = mode === 'sign-in';
+
+  identifierField.hidden = !signingIn;
+  usernameField.hidden = signingIn;
+  emailField.hidden = signingIn;
+  identifierInput.required = signingIn;
+  usernameInput.required = !signingIn;
+  emailInput.required = !signingIn;
+  passwordInput.autocomplete = signingIn ? 'current-password' : 'new-password';
+  signInModeBtn.classList.toggle('active', signingIn);
+  registerModeBtn.classList.toggle('active', !signingIn);
+  signInModeBtn.setAttribute('aria-selected', String(signingIn));
+  registerModeBtn.setAttribute('aria-selected', String(!signingIn));
+  authSubmitBtn.textContent = signingIn ? 'Sign in' : 'Create account';
+  authMessage.textContent = signingIn
+    ? 'Sign in with either your username or email address.'
+    : 'Choose a username and provide a unique email address.';
+  authMessage.classList.remove('error');
 }
 
 function formatDate(value) {
@@ -197,29 +227,32 @@ async function loadPosts(message = '') {
   }
 }
 
-loginForm.addEventListener('submit', async (event) => {
+authForm.addEventListener('submit', async (event) => {
   event.preventDefault();
-  showAuthMessage('Signing in...');
 
-  try {
-    const data = await requestJson(`${authBaseUrl}/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username: usernameInput.value.trim(),
-        password: passwordInput.value,
-      }),
-    });
+  if (authMode === 'sign-in') {
+    showAuthMessage('Signing in...');
 
-    setTokens(data);
-    showNotice('Signed in. Loading your posts...');
-    await loadPosts();
-  } catch (error) {
-    showAuthMessage(error.message, true);
+    try {
+      const data = await requestJson(`${authBaseUrl}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          identifier: identifierInput.value.trim(),
+          password: passwordInput.value,
+        }),
+      });
+
+      setTokens(data);
+      showNotice('Signed in. Loading your posts...');
+      await loadPosts();
+    } catch (error) {
+      showAuthMessage(error.message, true);
+    }
+
+    return;
   }
-});
 
-registerBtn.addEventListener('click', async () => {
   showAuthMessage('Creating account...');
 
   try {
@@ -228,14 +261,25 @@ registerBtn.addEventListener('click', async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         username: usernameInput.value.trim(),
+        email: emailInput.value.trim(),
         password: passwordInput.value,
       }),
     });
 
-    showAuthMessage(`${data.user.username} created. You can sign in now.`);
+    identifierInput.value = data.user.email;
+    setAuthMode('sign-in');
+    showAuthMessage(`${data.user.username} created. Sign in with ${data.user.email}.`);
   } catch (error) {
     showAuthMessage(error.message, true);
   }
+});
+
+signInModeBtn.addEventListener('click', () => {
+  setAuthMode('sign-in');
+});
+
+registerModeBtn.addEventListener('click', () => {
+  setAuthMode('register');
 });
 
 postForm.addEventListener('submit', async (event) => {
@@ -332,6 +376,7 @@ clearBtn.addEventListener('click', () => {
   showAuthMessage('Local tokens cleared.');
 });
 
+setAuthMode('sign-in');
 renderSession();
 
 if (!appView.hidden) {
