@@ -1,18 +1,21 @@
 # JWT Auth Demo
 
-A small Node.js and Express project for learning JWT authentication with MySQL, bcrypt password hashing, refresh tokens, and protected post routes.
+A small Node.js and Express project for learning JWT authentication with MySQL, bcrypt password hashing, Redis-backed login verification challenges, refresh tokens, and protected post routes.
 
 The app is split into two servers:
 
 - `server.js`: resource server on port `3000`
 - `authServer.js`: authentication server on port `4000`
 
-The auth server registers users with username, email, and password, then lets users log in with either username or email. The resource server reads, creates, and deletes posts in MySQL using the authenticated user's JWT payload.
+The auth server registers users with username, email, and password, then starts a Redis-backed verification challenge when users log in with either username or email. The resource server reads, creates, and deletes posts in MySQL using the authenticated user's JWT payload.
 
 ## Features
 
 - Register users with `username`, `email`, and `password`
 - Log in with either username or email
+- Require a verification code before issuing JWTs
+- Store login challenges in Redis by `challengeId`
+- Track verification failures and apply a 5-minute cooldown
 - Store users and posts in MySQL
 - Store password hashes with bcrypt
 - Generate access tokens and refresh tokens
@@ -32,6 +35,7 @@ The auth server registers users with username, email, and password, then lets us
 |-- authServer.js       # Register, login, token refresh, logout
 |-- server.js           # Protected post routes and static UI hosting
 |-- db.js               # MySQL connection pool
+|-- redisClient.js      # Redis client connection
 |-- public/             # Browser auth test UI
 |   |-- index.html
 |   |-- app.js
@@ -60,6 +64,7 @@ DB_PORT=3306
 DB_USER=root
 DB_PASSWORD=
 DB_NAME=jwt_auth_demo
+REDIS_URL=redis://localhost:6379
 ```
 
 Generate JWT secrets with:
@@ -69,6 +74,40 @@ node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 ```
 
 Do not commit `.env`. It is ignored by Git.
+
+## Redis Setup
+
+For local development, run Redis with Docker:
+
+```bash
+docker run --name jwt-auth-redis -p 6379:6379 -d redis:7
+```
+
+If the container already exists but is stopped:
+
+```bash
+docker start jwt-auth-redis
+```
+
+Verify Redis:
+
+```bash
+docker exec jwt-auth-redis redis-cli ping
+```
+
+Expected:
+
+```text
+PONG
+```
+
+The auth server uses Redis for login challenges:
+
+```text
+login_challenge:<challengeId>
+```
+
+Each challenge stores the user id, username, hashed verification code, failure count, and creation time. Challenge keys expire automatically.
 
 ## MySQL Setup
 
@@ -139,6 +178,8 @@ Start the authentication server in a second terminal:
 npm run devStartAuth
 ```
 
+The auth server connects to Redis before listening on port `4000`. If Redis is not running, `authServer.js` exits instead of starting in a broken state.
+
 The servers run at:
 
 - Resource server and browser UI: `http://localhost:3000`
@@ -156,6 +197,7 @@ Use the UI to:
 
 - register a new user
 - log in with username or email
+- enter the verification code printed by the auth server
 - view the current access token and refresh token
 - fetch the logged-in user's posts
 - create a post title for the logged-in user
@@ -221,10 +263,39 @@ Returns:
 
 ```json
 {
+  "challengeId": "...",
+  "message": "Verification code sent"
+}
+```
+
+For local testing, the verification code is printed in the auth server terminal:
+
+```text
+Verification code for Barry: 123456
+```
+
+### Verify Login
+
+```http
+POST http://localhost:4000/login/verify
+Content-Type: application/json
+
+{
+  "challengeId": "<challengeId>",
+  "verificationCode": "123456"
+}
+```
+
+Returns JWTs when the challenge id exists and the verification code is correct:
+
+```json
+{
   "accessToken": "...",
   "refreshToken": "..."
 }
 ```
+
+If the code is wrong, the server increments the challenge failure count. After 3 failed attempts, the challenge is deleted and a 5-minute cooldown key is created for that user. During cooldown, login returns `429 Too Many Requests`.
 
 ### Get Protected Posts
 
@@ -344,16 +415,19 @@ Use `requests.rest` with the VS Code REST Client extension:
 
 1. Run `POST /register` to create a user with username, email, and password.
 2. Run `POST /login` with either username or email as `identifier`.
-3. Copy the returned `accessToken` into `@accessToken`.
-4. Copy the returned `refreshToken` into `@refreshToken`.
-5. Run `GET /posts`.
-6. Run `POST /posts` to create a post.
-7. Run `GET /posts` again to see the new post.
-8. Copy a post id into `@postId`.
-9. Run `DELETE /posts/{{postId}}` to delete that post.
-10. Run `POST /token` to refresh the access token.
-11. Run `DELETE /logout`.
-12. Try `POST /token` again and expect `403 Forbidden`.
+3. Copy the returned `challengeId` into `@challengeId`.
+4. Copy the printed terminal code into `@verificationCode`.
+5. Run `POST /login/verify`.
+6. Copy the returned `accessToken` into `@accessToken`.
+7. Copy the returned `refreshToken` into `@refreshToken`.
+8. Run `GET /posts`.
+9. Run `POST /posts` to create a post.
+10. Run `GET /posts` again to see the new post.
+11. Copy a post id into `@postId`.
+12. Run `DELETE /posts/{{postId}}` to delete that post.
+13. Run `POST /token` to refresh the access token.
+14. Run `DELETE /logout`.
+15. Try `POST /token` again and expect `403 Forbidden`.
 
 Do not commit real tokens. Keep placeholders like:
 
@@ -361,11 +435,15 @@ Do not commit real tokens. Keep placeholders like:
 @accessToken = paste_access_token_here
 @refreshToken = paste_refresh_token_here
 @postId = paste_post_id_here
+@challengeId = paste_challenge_id_here
+@verificationCode = paste_verification_code_here
 ```
 
 ## Notes
 
 - Refresh tokens are currently stored in memory, so they disappear when `authServer.js` restarts.
 - Posts are now stored in MySQL, but refresh tokens are not yet stored in MySQL.
+- Login verification codes are printed to the server terminal for local testing instead of being sent by email.
+- Redis stores temporary login challenges and cooldown state.
 - A production app should store refresh tokens or sessions in a database and support token revocation more carefully.
 - This project is for learning JWT concepts, not production use.

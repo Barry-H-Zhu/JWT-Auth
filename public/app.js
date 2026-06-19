@@ -8,11 +8,13 @@ const storageKeys = {
 const authView = document.querySelector('#authView');
 const appView = document.querySelector('#appView');
 const authForm = document.querySelector('#authForm');
+const verificationForm = document.querySelector('#verificationForm');
 const postForm = document.querySelector('#postForm');
 const identifierInput = document.querySelector('#identifier');
 const usernameInput = document.querySelector('#username');
 const emailInput = document.querySelector('#email');
 const passwordInput = document.querySelector('#password');
+const verificationCodeInput = document.querySelector('#verificationCode');
 const identifierField = document.querySelector('#identifierField');
 const usernameField = document.querySelector('#usernameField');
 const emailField = document.querySelector('#emailField');
@@ -30,6 +32,9 @@ const postsList = document.querySelector('#postsList');
 const signInModeBtn = document.querySelector('#signInModeBtn');
 const registerModeBtn = document.querySelector('#registerModeBtn');
 const authSubmitBtn = document.querySelector('#authSubmitBtn');
+const challengeIdValue = document.querySelector('#challengeIdValue');
+const cancelVerificationBtn = document.querySelector('#cancelVerificationBtn');
+const verifyLoginBtn = document.querySelector('#verifyLoginBtn');
 const postsBtn = document.querySelector('#postsBtn');
 const createPostBtn = document.querySelector('#createPostBtn');
 const refreshBtn = document.querySelector('#refreshBtn');
@@ -38,6 +43,7 @@ const clearBtn = document.querySelector('#clearBtn');
 
 let currentPosts = [];
 let authMode = 'sign-in';
+let pendingChallengeId = '';
 
 function getTokens() {
   return {
@@ -101,6 +107,12 @@ function setAuthMode(mode) {
   authMode = mode;
   const signingIn = mode === 'sign-in';
 
+  pendingChallengeId = '';
+  challengeIdValue.textContent = '';
+  verificationCodeInput.value = '';
+  verificationForm.hidden = true;
+  authForm.hidden = false;
+  document.querySelector('.auth-mode').hidden = false;
   identifierField.hidden = !signingIn;
   usernameField.hidden = signingIn;
   emailField.hidden = signingIn;
@@ -117,6 +129,16 @@ function setAuthMode(mode) {
     ? 'Sign in with either your username or email address.'
     : 'Choose a username and provide a unique email address.';
   authMessage.classList.remove('error');
+}
+
+function showVerificationStep(challengeId, message) {
+  pendingChallengeId = challengeId;
+  challengeIdValue.textContent = challengeId;
+  authForm.hidden = true;
+  verificationForm.hidden = false;
+  document.querySelector('.auth-mode').hidden = true;
+  showAuthMessage(`${message}. Enter the 6-digit code to finish signing in.`);
+  verificationCodeInput.focus();
 }
 
 function formatDate(value) {
@@ -243,9 +265,7 @@ authForm.addEventListener('submit', async (event) => {
         }),
       });
 
-      setTokens(data);
-      showNotice('Signed in. Loading your posts...');
-      await loadPosts();
+      showVerificationStep(data.challengeId, data.message || 'Verification code sent');
     } catch (error) {
       showAuthMessage(error.message, true);
     }
@@ -272,6 +292,43 @@ authForm.addEventListener('submit', async (event) => {
   } catch (error) {
     showAuthMessage(error.message, true);
   }
+});
+
+verificationForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+
+  if (!pendingChallengeId) {
+    showAuthMessage('Start the sign-in process again.', true);
+    setAuthMode('sign-in');
+    return;
+  }
+
+  verifyLoginBtn.disabled = true;
+  showAuthMessage('Verifying code...');
+
+  try {
+    const data = await requestJson(`${authBaseUrl}/login/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        challengeId: pendingChallengeId,
+        verificationCode: verificationCodeInput.value.trim(),
+      }),
+    });
+
+    pendingChallengeId = '';
+    setTokens(data);
+    showNotice('Verification complete. Loading your posts...');
+    await loadPosts();
+  } catch (error) {
+    showAuthMessage(error.message, true);
+  } finally {
+    verifyLoginBtn.disabled = false;
+  }
+});
+
+cancelVerificationBtn.addEventListener('click', () => {
+  setAuthMode('sign-in');
 });
 
 signInModeBtn.addEventListener('click', () => {

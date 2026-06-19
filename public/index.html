@@ -49,6 +49,26 @@
           <button id="authSubmitBtn" class="primary-button" type="submit">Sign in</button>
         </form>
 
+        <form id="verificationForm" class="auth-form verification-form" hidden>
+          <div class="verification-copy">
+            <p class="eyebrow">Verification</p>
+            <h3>Enter your login code</h3>
+            <p>Use the 6-digit code sent for this sign-in attempt.</p>
+          </div>
+          <label>
+            <span>Verification code</span>
+            <input id="verificationCode" name="verificationCode" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="000000" required>
+          </label>
+          <details class="challenge-debug">
+            <summary>Challenge debug</summary>
+            <code id="challengeIdValue"></code>
+          </details>
+          <div class="verification-actions">
+            <button id="cancelVerificationBtn" class="secondary-button" type="button">Back</button>
+            <button id="verifyLoginBtn" class="primary-button" type="submit">Verify and sign in</button>
+          </div>
+        </form>
+
         <p id="authMessage" class="message">Sign in with either your username or email address.</p>
       </section>
     </section>

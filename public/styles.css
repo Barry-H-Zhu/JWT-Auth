@@ -123,6 +123,11 @@ h2 {
   font-size: 1.2rem;
 }
 
+h3 {
+  margin-bottom: 0;
+  font-size: 1.08rem;
+}
+
 .auth-form,
 .debug-panel,
 .sidebar-actions {
@@ -132,6 +137,47 @@ h2 {
 
 .auth-form {
   margin-top: 18px;
+}
+
+.verification-copy p:last-child {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+#verificationCode {
+  font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 1.35rem;
+  font-weight: 850;
+  letter-spacing: 0.18em;
+  text-align: center;
+}
+
+.verification-actions {
+  display: grid;
+  grid-template-columns: minmax(90px, 0.65fr) minmax(150px, 1.35fr);
+  gap: 10px;
+}
+
+.challenge-debug {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.challenge-debug summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.challenge-debug code {
+  display: block;
+  margin-top: 7px;
+  padding: 8px;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-soft);
 }
 
 .auth-mode {
@@ -486,6 +532,10 @@ textarea:focus {
   }
 
   .composer {
+    grid-template-columns: 1fr;
+  }
+
+  .verification-actions {
     grid-template-columns: 1fr;
   }
 }

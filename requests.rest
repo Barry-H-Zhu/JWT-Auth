@@ -29,6 +29,21 @@ Content-Type: application/json
 
 ###
 
+@challengeId = paste_challenge_id_here
+@verificationCode = paste_verification_code_here
+
+###
+
+POST http://localhost:4000/login/verify
+Content-Type: application/json
+
+{
+  "challengeId": "{{challengeId}}",
+  "verificationCode": "{{verificationCode}}"
+}
+
+###
+
 @accessToken = paste_access_token_here
 @refreshToken = paste_refresh_token_here
 
