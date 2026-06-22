@@ -28,21 +28,53 @@ const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 app.post('/token', async (req, res) => {
     const refreshToken = req.cookies.refreshToken;
-    if (refreshToken == null) return res.sendStatus(401);
+
+    if (!refreshToken) {
+        return res.sendStatus(401);
+    }
+
+    let tokenUser;
 
     try {
-        const storedToken = await redisClient.get(getRefreshTokenKey(refreshToken));
-        if (!storedToken) return res.sendStatus(403);
+        tokenUser = jwt.verify(
+            refreshToken,
+            process.env.REFRESH_TOKEN_SECRET
+        );
+    } catch {
+        clearRefreshTokenCookie(res);
+        return res.sendStatus(403);
+    }
 
-        jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET, (err, user) => {
-            if (err) return res.sendStatus(403);
+    try {
+        const storedSession = await redisClient.getDel(
+            getRefreshTokenKey(refreshToken)
+        );
 
-            const accessToken = generateAccessToken({ id: user.id, name: user.name });
-            res.json({ accessToken: accessToken });
+        if (!storedSession) {
+            clearRefreshTokenCookie(res);
+            return res.sendStatus(403);
+        }
+
+        const user = {
+            id: tokenUser.id,
+            name: tokenUser.name
+        };
+
+        const newRefreshToken = generateRefreshToken(user);
+
+        await storeRefreshSession(newRefreshToken, user);
+        setRefreshTokenCookie(res, newRefreshToken);
+
+        const accessToken = generateAccessToken(user);
+
+        res.json({
+            accessToken: accessToken
         });
     } catch (err) {
         console.error(err);
-        res.status(500).json({ message: 'Could not refresh token' });
+        res.status(500).json({
+            message: 'Could not refresh token'
+        });
     }
 });
 
@@ -56,11 +88,7 @@ app.delete('/logout', async (req, res) => {
     try {
         await redisClient.del(getRefreshTokenKey(refreshToken));
 
-        res.clearCookie('refreshToken', {
-            httpOnly: true,
-            sameSite: 'strict',
-            secure: false
-        });
+        clearRefreshTokenCookie(res);
 
         res.sendStatus(204);
     } catch (err) {
@@ -229,35 +257,11 @@ app.post('/login/verify', async (req, res) => {
 
         const accessToken = generateAccessToken(user);
 
-        const refreshTokenPayload = {
-            ...user,
-            jti: crypto.randomUUID()
-        };
+        const refreshToken = generateRefreshToken(user);
 
-        const refreshToken = jwt.sign(
-            refreshTokenPayload,
-            process.env.REFRESH_TOKEN_SECRET,
-            { expiresIn: REFRESH_TOKEN_TTL_SECONDS }
-        );
+        await storeRefreshSession(refreshToken, user);
 
-        await redisClient.set(
-            getRefreshTokenKey(refreshToken),
-            JSON.stringify({
-                userId: user.id,
-                username: user.name,
-                createdAt: new Date().toISOString()
-            }),
-            {
-                EX: REFRESH_TOKEN_TTL_SECONDS
-            }
-        );
-
-        res.cookie('refreshToken', refreshToken, {
-            httpOnly: true,
-            sameSite: 'strict',
-            secure: false,
-            maxAge: REFRESH_TOKEN_TTL_SECONDS * 1000
-        });
+        setRefreshTokenCookie(res, refreshToken);
 
         res.json({
             accessToken: accessToken
@@ -293,6 +297,50 @@ function getRefreshTokenKey(refreshToken) {
 
 function generateAccessToken(user) {
     return jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '20m' });
+}
+
+function generateRefreshToken(user) {
+    return jwt.sign(
+        {
+            ...user,
+            jti: crypto.randomUUID()
+        },
+        process.env.REFRESH_TOKEN_SECRET,
+        {
+            expiresIn: REFRESH_TOKEN_TTL_SECONDS
+        }
+    );
+}
+
+async function storeRefreshSession(refreshToken, user) {
+    await redisClient.set(
+        getRefreshTokenKey(refreshToken),
+        JSON.stringify({
+            userId: user.id,
+            username: user.name,
+            createdAt: new Date().toISOString()
+        }),
+        {
+            EX: REFRESH_TOKEN_TTL_SECONDS
+        }
+    );
+}
+
+function setRefreshTokenCookie(res, refreshToken) {
+    res.cookie('refreshToken', refreshToken, {
+        httpOnly: true,
+        sameSite: 'strict',
+        secure: false,
+        maxAge: REFRESH_TOKEN_TTL_SECONDS * 1000
+    });
+}
+
+function clearRefreshTokenCookie(res) {
+    res.clearCookie('refreshToken', {
+        httpOnly: true,
+        sameSite: 'strict',
+        secure: false
+    });
 }
 
 connectRedis()

@@ -17,6 +17,8 @@ The app runs as two servers:
 - Use short-lived JWT access tokens for protected post routes
 - Store refresh-token sessions in Redis by a SHA-256 token hash
 - Deliver refresh tokens in HttpOnly cookies instead of exposing them to browser JavaScript
+- Rotate refresh tokens on every successful access-token refresh
+- Reject replayed refresh tokens after their Redis session has been consumed
 - Restore the shared browser login state in newly opened tabs
 - Revoke the current refresh session on logout
 - Store users and posts in MySQL
@@ -167,8 +169,9 @@ The auth server must be available at `http://localhost:4000`.
 3. `POST /login/verify` validates the code and returns an access token.
 4. The same response sets the refresh token as an HttpOnly cookie.
 5. The browser sends that cookie automatically to `POST /token` and `DELETE /logout`.
-6. `POST /token` checks the Redis refresh-session key before issuing a new access token.
-7. `DELETE /logout` deletes that Redis key and clears the cookie.
+6. `POST /token` verifies the JWT and atomically consumes its Redis session with `GETDEL`.
+7. The server creates a new refresh token and Redis session, replaces the cookie, and returns a new access token.
+8. `DELETE /logout` deletes the current Redis session and clears the cookie.
 
 Access tokens are kept in per-tab `sessionStorage` and sent in the `Authorization` header. Refresh tokens cannot be read by application JavaScript.
 
@@ -231,7 +234,7 @@ The refresh token is delivered separately through a `Set-Cookie` response header
 POST http://localhost:4000/token
 ```
 
-The request has no token body. The client must include the refresh cookie.
+The request has no token body. The client must include the refresh cookie. A successful request rotates the refresh token: the old Redis key is deleted, a new key is stored, and the response replaces the HttpOnly cookie. Reusing the old token returns `403 Forbidden`.
 
 ### Logout
 
@@ -287,6 +290,8 @@ Keep only placeholders in `requests.rest`; do not commit real access tokens or v
 - Verification codes are stored as SHA-256 hashes and expire automatically.
 - Refresh tokens include a unique JWT ID (`jti`) so simultaneous logins create separate sessions.
 - Redis keys contain only a SHA-256 hash of each refresh token.
+- Refresh sessions are consumed atomically during rotation, so one old token cannot refresh twice.
+- Invalid, expired, or revoked refresh cookies are cleared from the requesting client.
 - Refresh JWTs, Redis session keys, and cookies all expire after seven days.
 - The local cookie uses `secure: false` because development runs over HTTP. Production cookies must use HTTPS and `secure: true`.
 - The verification code is printed to the terminal only for local development.
