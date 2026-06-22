@@ -45,7 +45,6 @@ Content-Type: application/json
 ###
 
 @accessToken = paste_access_token_here
-@refreshToken = paste_refresh_token_here
 
 ###
 
@@ -72,17 +71,7 @@ Authorization: Bearer {{accessToken}}
 ###
 
 POST http://localhost:4000/token
-Content-Type: application/json
-
-{
-  "token": "{{refreshToken}}"
-}
 
 ###
 
 DELETE http://localhost:4000/logout
-Content-Type: application/json
-
-{
-  "token": "{{refreshToken}}"
-}

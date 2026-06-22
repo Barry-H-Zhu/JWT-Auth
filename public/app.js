@@ -2,7 +2,6 @@ const resourceBaseUrl = window.location.origin;
 const authBaseUrl = `${window.location.protocol}//${window.location.hostname}:4000`;
 const storageKeys = {
   accessToken: 'jwt-demo-access-token',
-  refreshToken: 'jwt-demo-refresh-token',
 };
 
 const authView = document.querySelector('#authView');
@@ -47,26 +46,20 @@ let pendingChallengeId = '';
 
 function getTokens() {
   return {
-    accessToken: localStorage.getItem(storageKeys.accessToken) || '',
-    refreshToken: localStorage.getItem(storageKeys.refreshToken) || '',
+    accessToken: sessionStorage.getItem(storageKeys.accessToken) || '',
   };
 }
 
-function setTokens({ accessToken, refreshToken }) {
+function setTokens({ accessToken }) {
   if (accessToken !== undefined) {
-    localStorage.setItem(storageKeys.accessToken, accessToken);
-  }
-
-  if (refreshToken !== undefined) {
-    localStorage.setItem(storageKeys.refreshToken, refreshToken);
+    sessionStorage.setItem(storageKeys.accessToken, accessToken);
   }
 
   renderSession();
 }
 
 function clearTokens() {
-  localStorage.removeItem(storageKeys.accessToken);
-  localStorage.removeItem(storageKeys.refreshToken);
+  sessionStorage.removeItem(storageKeys.accessToken);
   currentPosts = [];
   renderSession();
 }
@@ -178,12 +171,12 @@ function authedHeaders(extra = {}) {
 function renderSession() {
   const tokens = getTokens();
   const user = getCurrentUser();
-  const signedIn = Boolean(tokens.accessToken && tokens.refreshToken && user);
+  const signedIn = Boolean(tokens.accessToken && user);
 
   authView.hidden = signedIn;
   appView.hidden = !signedIn;
   accessTokenInput.value = tokens.accessToken;
-  refreshTokenInput.value = tokens.refreshToken;
+  refreshTokenInput.value = signedIn ? 'Stored in HttpOnly cookie' : '';
   authState.textContent = signedIn ? 'Signed in' : 'Signed out';
   authState.classList.toggle('signed-in', signedIn);
 
@@ -197,6 +190,21 @@ function renderSession() {
   userMeta.textContent = `User ID ${user.id}`;
   userAvatar.textContent = initials(name);
   composerAvatar.textContent = initials(name);
+}
+
+async function restoreSession() {
+  try {
+    const data = await requestJson(`${authBaseUrl}/token`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+
+    setTokens({ accessToken: data.accessToken });
+    await loadPosts();
+  } catch {
+    clearTokens();
+    showAuthMessage('Sign in to continue.');
+  }
 }
 
 function renderPosts(posts) {
@@ -309,6 +317,7 @@ verificationForm.addEventListener('submit', async (event) => {
   try {
     const data = await requestJson(`${authBaseUrl}/login/verify`, {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         challengeId: pendingChallengeId,
@@ -394,14 +403,12 @@ postsList.addEventListener('click', async (event) => {
 });
 
 refreshBtn.addEventListener('click', async () => {
-  const { refreshToken } = getTokens();
   showNotice('Refreshing access token...');
 
   try {
     const data = await requestJson(`${authBaseUrl}/token`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: refreshToken }),
+      credentials: 'include',
     });
 
     setTokens({ accessToken: data.accessToken });
@@ -412,13 +419,10 @@ refreshBtn.addEventListener('click', async () => {
 });
 
 logoutBtn.addEventListener('click', async () => {
-  const { refreshToken } = getTokens();
-
   try {
     await requestJson(`${authBaseUrl}/logout`, {
       method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: refreshToken }),
+      credentials: 'include',
     });
   } catch {
     // Local cleanup should still happen if the refresh token is already invalid.
@@ -430,12 +434,8 @@ logoutBtn.addEventListener('click', async () => {
 
 clearBtn.addEventListener('click', () => {
   clearTokens();
-  showAuthMessage('Local tokens cleared.');
+  showAuthMessage('Access token cleared. Your refresh cookie is still active.');
 });
 
 setAuthMode('sign-in');
-renderSession();
-
-if (!appView.hidden) {
-  loadPosts();
-}
+restoreSession();

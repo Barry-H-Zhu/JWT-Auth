@@ -3,6 +3,7 @@ require('dotenv').config();
 const express = require('express');
 const app = express();
 
+const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
 const db = require('./db');
 const bcrypt = require('bcrypt');
@@ -10,35 +11,62 @@ const { redisClient, connectRedis } = require('./redisClient');
 const crypto = require('crypto');
 
 app.use(express.json());
+app.use(cookieParser());
 app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Origin', 'http://localhost:3000');
+    res.header('Access-Control-Allow-Credentials', 'true');
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
     if (req.method === 'OPTIONS') return res.sendStatus(204);
     next();
 });
 
-let refreshTokens = [];
-
 const CHALLENGE_TTL_SECONDS = 10 * 60;
 const MAX_VERIFICATION_FAILURES = 3;
 const COOLDOWN_SECONDS = 5 * 60;
+const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 
-app.post('/token', (req, res) => {
-    const refreshToken = req.body.token;
+app.post('/token', async (req, res) => {
+    const refreshToken = req.cookies.refreshToken;
     if (refreshToken == null) return res.sendStatus(401);
-    if (!refreshTokens.includes(refreshToken)) return res.sendStatus(403);
 
-    jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET, (err, user) => {
-        if (err) return res.sendStatus(403);
-        const accessToken = generateAccessToken({ id: user.id, name: user.name });
-        res.json({ accessToken: accessToken });
-    });
+    try {
+        const storedToken = await redisClient.get(getRefreshTokenKey(refreshToken));
+        if (!storedToken) return res.sendStatus(403);
+
+        jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET, (err, user) => {
+            if (err) return res.sendStatus(403);
+
+            const accessToken = generateAccessToken({ id: user.id, name: user.name });
+            res.json({ accessToken: accessToken });
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Could not refresh token' });
+    }
 });
 
-app.delete('/logout', (req, res) => {
-    refreshTokens = refreshTokens.filter(token => token !== req.body.token);
-    res.sendStatus(204);
+app.delete('/logout', async (req, res) => {
+    const refreshToken = req.cookies.refreshToken;
+
+    if (!refreshToken) {
+        return res.sendStatus(400);
+    }
+
+    try {
+        await redisClient.del(getRefreshTokenKey(refreshToken));
+
+        res.clearCookie('refreshToken', {
+            httpOnly: true,
+            sameSite: 'strict',
+            secure: false
+        });
+
+        res.sendStatus(204);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Could not log out' });
+    }
 });
 
 app.post('/register', async (req, res) => {
@@ -200,13 +228,41 @@ app.post('/login/verify', async (req, res) => {
         };
 
         const accessToken = generateAccessToken(user);
-        const refreshToken = jwt.sign(user, process.env.REFRESH_TOKEN_SECRET);
-        refreshTokens.push(refreshToken);
+
+        const refreshTokenPayload = {
+            ...user,
+            jti: crypto.randomUUID()
+        };
+
+        const refreshToken = jwt.sign(
+            refreshTokenPayload,
+            process.env.REFRESH_TOKEN_SECRET,
+            { expiresIn: REFRESH_TOKEN_TTL_SECONDS }
+        );
+
+        await redisClient.set(
+            getRefreshTokenKey(refreshToken),
+            JSON.stringify({
+                userId: user.id,
+                username: user.name,
+                createdAt: new Date().toISOString()
+            }),
+            {
+                EX: REFRESH_TOKEN_TTL_SECONDS
+            }
+        );
+
+        res.cookie('refreshToken', refreshToken, {
+            httpOnly: true,
+            sameSite: 'strict',
+            secure: false,
+            maxAge: REFRESH_TOKEN_TTL_SECONDS * 1000
+        });
 
         res.json({
-            accessToken: accessToken,
-            refreshToken: refreshToken
+            accessToken: accessToken
         });
+
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: 'Could not verify login' });
@@ -222,6 +278,17 @@ function hashVerificationCode(code) {
         .createHash('sha256')
         .update(code)
         .digest('hex');
+}
+
+function hashToken(token) {
+    return crypto
+        .createHash('sha256')
+        .update(token)
+        .digest('hex');
+}
+
+function getRefreshTokenKey(refreshToken) {
+    return `refresh_token:${hashToken(refreshToken)}`;
 }
 
 function generateAccessToken(user) {
