@@ -11,7 +11,7 @@ The app runs as two servers:
 
 - Register with a unique username, unique email, and bcrypt-hashed password
 - Log in with either username or email
-- Complete a six-digit verification challenge before receiving tokens
+- Receive a six-digit verification code by email and complete the challenge before receiving tokens
 - Store verification challenges and cooldown state in Redis
 - Limit failed verification attempts and apply a five-minute cooldown
 - Use short-lived JWT access tokens for protected post routes
@@ -32,6 +32,7 @@ The app runs as two servers:
 |-- server.js           # Protected post routes and static UI hosting
 |-- db.js               # MySQL connection pool
 |-- redisClient.js      # Redis connection
+|-- emailService.js     # SMTP email sender for verification codes
 |-- public/
 |   |-- index.html      # Browser test UI
 |   |-- app.js
@@ -61,6 +62,12 @@ DB_USER=root
 DB_PASSWORD=
 DB_NAME=jwt_auth_demo
 REDIS_URL=redis://localhost:6380
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=465
+EMAIL_SECURE=true
+EMAIL_USER=your-email@gmail.com
+EMAIL_PASS=your-google-app-password
+EMAIL_FROM=your-email@gmail.com
 ```
 
 Generate JWT secrets with:
@@ -70,6 +77,8 @@ node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 ```
 
 Do not commit `.env`. It is ignored by Git.
+
+For local Gmail SMTP testing, enable two-step verification on the sender account and create a Google app password for `EMAIL_PASS`. The email settings define the sender account; the actual recipient comes from the user's `email` column in MySQL.
 
 ## Redis Setup
 
@@ -165,13 +174,14 @@ The auth server must be available at `http://localhost:4000`.
 ## Authentication Flow
 
 1. `POST /login` validates the identifier and password and creates a Redis challenge.
-2. The local verification code is printed in the auth-server terminal.
-3. `POST /login/verify` validates the code and returns an access token.
-4. The same response sets the refresh token as an HttpOnly cookie.
-5. The browser sends that cookie automatically to `POST /token` and `DELETE /logout`.
-6. `POST /token` verifies the JWT and atomically consumes its Redis session with `GETDEL`.
-7. The server creates a new refresh token and Redis session, replaces the cookie, and returns a new access token.
-8. `DELETE /logout` deletes the current Redis session and clears the cookie.
+2. The verification code is emailed to the user's registered email address.
+3. The local verification code is also printed in the auth-server terminal for development.
+4. `POST /login/verify` validates the code and returns an access token.
+5. The same response sets the refresh token as an HttpOnly cookie.
+6. The browser sends that cookie automatically to `POST /token` and `DELETE /logout`.
+7. `POST /token` verifies the JWT and atomically consumes its Redis session with `GETDEL`.
+8. The server creates a new refresh token and Redis session, replaces the cookie, and returns a new access token.
+9. `DELETE /logout` deletes the current Redis session and clears the cookie.
 
 Access tokens are kept in per-tab `sessionStorage` and sent in the `Authorization` header. Refresh tokens cannot be read by application JavaScript.
 
@@ -204,7 +214,7 @@ Content-Type: application/json
 }
 ```
 
-The response contains a `challengeId`. The identifier may be a username or email.
+The response contains a `challengeId`. The identifier may be a username or email. The verification code is sent to the user's registered email address and is also printed in the auth-server terminal during local development.
 
 ### Verify Login
 
@@ -294,5 +304,5 @@ Keep only placeholders in `requests.rest`; do not commit real access tokens or v
 - Invalid, expired, or revoked refresh cookies are cleared from the requesting client.
 - Refresh JWTs, Redis session keys, and cookies all expire after seven days.
 - The local cookie uses `secure: false` because development runs over HTTP. Production cookies must use HTTPS and `secure: true`.
-- The verification code is printed to the terminal only for local development.
+- Verification codes are emailed to the user's registered address and printed to the terminal only for local development.
 - This project demonstrates authentication concepts and is not production-ready.

@@ -8,6 +8,7 @@ const jwt = require('jsonwebtoken');
 const db = require('./db');
 const bcrypt = require('bcrypt');
 const { redisClient, connectRedis } = require('./redisClient');
+const { sendVerificationEmail } = require('./emailService');
 const crypto = require('crypto');
 
 app.use(express.json());
@@ -186,6 +187,8 @@ app.post('/login', async (req, res) => {
         );
 
         console.log(`Verification code for ${userRecord.username}: ${verificationCode}`);
+
+        await sendVerificationEmail(userRecord.email, verificationCode);
 
         res.json({
             challengeId: challengeId,
