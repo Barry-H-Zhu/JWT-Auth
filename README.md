@@ -19,6 +19,7 @@ The app runs as two servers:
 - Deliver refresh tokens in HttpOnly cookies instead of exposing them to browser JavaScript
 - Rotate refresh tokens on every successful access-token refresh
 - Reject replayed refresh tokens after their Redis session has been consumed
+- Require an explicit CSRF protection header before refresh or logout cookie actions
 - Restore the shared browser login state in newly opened tabs
 - Revoke the current refresh session on logout
 - Store users and posts in MySQL
@@ -185,6 +186,8 @@ The auth server must be available at `http://localhost:4000`.
 
 Access tokens are kept in per-tab `sessionStorage` and sent in the `Authorization` header. Refresh tokens cannot be read by application JavaScript.
 
+Because refresh and logout use browser cookies, those requests must also include `X-CSRF-Protection: 1`. The browser UI and `requests.rest` examples send this header for `POST /token` and `DELETE /logout`.
+
 The refresh cookie is shared by tabs on the same browser profile. A newly opened tab silently calls `/token` and restores the existing browser session. Use another browser profile or an incognito window to test two accounts at the same time.
 
 ## API Summary
@@ -242,6 +245,7 @@ The refresh token is delivered separately through a `Set-Cookie` response header
 
 ```http
 POST http://localhost:4000/token
+X-CSRF-Protection: 1
 ```
 
 The request has no token body. The client must include the refresh cookie. A successful request rotates the refresh token: the old Redis key is deleted, a new key is stored, and the response replaces the HttpOnly cookie. Reusing the old token returns `403 Forbidden`.
@@ -250,6 +254,7 @@ The request has no token body. The client must include the refresh cookie. A suc
 
 ```http
 DELETE http://localhost:4000/logout
+X-CSRF-Protection: 1
 ```
 
 Logout revokes the current Redis refresh session and clears the refresh cookie. Already-issued access tokens remain valid until their 20-minute expiration.
@@ -288,8 +293,8 @@ The VS Code REST Client keeps cookies returned by the auth server in its cookie 
 4. Verify login; REST Client stores the refresh cookie.
 5. Copy the returned access token into `@accessToken`.
 6. Test the protected post routes.
-7. Run `POST /token` without a body.
-8. Run `DELETE /logout` without a body.
+7. Run `POST /token` without a body; keep the `X-CSRF-Protection: 1` header.
+8. Run `DELETE /logout` without a body; keep the `X-CSRF-Protection: 1` header.
 9. Run `POST /token` again and expect `401 Unauthorized` because the cookie was cleared.
 
 Keep only placeholders in `requests.rest`; do not commit real access tokens or verification codes.
@@ -303,6 +308,6 @@ Keep only placeholders in `requests.rest`; do not commit real access tokens or v
 - Refresh sessions are consumed atomically during rotation, so one old token cannot refresh twice.
 - Invalid, expired, or revoked refresh cookies are cleared from the requesting client.
 - Refresh JWTs, Redis session keys, and cookies all expire after seven days.
-- The local cookie uses `secure: false` because development runs over HTTP. Production cookies must use HTTPS and `secure: true`.
+- Refresh cookies use `secure: true` when `NODE_ENV=production`; production deployments must run over HTTPS.
 - Verification codes are emailed to the user's registered address and printed to the terminal only for local development.
 - This project demonstrates authentication concepts and is not production-ready.

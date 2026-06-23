@@ -13,21 +13,44 @@ const crypto = require('crypto');
 
 app.use(express.json());
 app.use(cookieParser());
+
+const allowedOrigins = [
+    'http://localhost:3000',
+    'http://192.168.0.104:3000'
+];
+
 app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', 'http://localhost:3000');
+    const origin = req.headers.origin;
+
+    if (allowedOrigins.includes(origin)) {
+        res.header('Access-Control-Allow-Origin', origin);
+    }
+
     res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-CSRF-Protection');
     res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+
     if (req.method === 'OPTIONS') return res.sendStatus(204);
+
     next();
 });
+
+function requireCsrfHeader(req, res, next) {
+    const csrfHeader = req.get('X-CSRF-Protection');
+
+    if (csrfHeader !== '1') {
+        return res.status(403).json({ message: 'CSRF protection header is required' });
+    }
+
+    next();
+}
 
 const CHALLENGE_TTL_SECONDS = 10 * 60;
 const MAX_VERIFICATION_FAILURES = 3;
 const COOLDOWN_SECONDS = 5 * 60;
 const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 
-app.post('/token', async (req, res) => {
+app.post('/token', requireCsrfHeader, async (req, res) => {
     const refreshToken = req.cookies.refreshToken;
 
     if (!refreshToken) {
@@ -79,7 +102,7 @@ app.post('/token', async (req, res) => {
     }
 });
 
-app.delete('/logout', async (req, res) => {
+app.delete('/logout', requireCsrfHeader, async (req, res) => {
     const refreshToken = req.cookies.refreshToken;
 
     if (!refreshToken) {
@@ -333,7 +356,7 @@ function setRefreshTokenCookie(res, refreshToken) {
     res.cookie('refreshToken', refreshToken, {
         httpOnly: true,
         sameSite: 'strict',
-        secure: false,
+        secure: process.env.NODE_ENV === 'production',
         maxAge: REFRESH_TOKEN_TTL_SECONDS * 1000
     });
 }
@@ -342,7 +365,7 @@ function clearRefreshTokenCookie(res) {
     res.clearCookie('refreshToken', {
         httpOnly: true,
         sameSite: 'strict',
-        secure: false
+        secure: process.env.NODE_ENV === 'production'
     });
 }
 

@@ -71,7 +71,9 @@ Authorization: Bearer {{accessToken}}
 ###
 
 POST http://localhost:4000/token
+X-CSRF-Protection: 1
 
 ###
 
 DELETE http://localhost:4000/logout
+X-CSRF-Protection: 1

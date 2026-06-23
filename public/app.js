@@ -197,6 +197,7 @@ async function restoreSession() {
     const data = await requestJson(`${authBaseUrl}/token`, {
       method: 'POST',
       credentials: 'include',
+      headers: { 'X-CSRF-Protection': '1' },
     });
 
     setTokens({ accessToken: data.accessToken });
@@ -409,6 +410,7 @@ refreshBtn.addEventListener('click', async () => {
     const data = await requestJson(`${authBaseUrl}/token`, {
       method: 'POST',
       credentials: 'include',
+      headers: { 'X-CSRF-Protection': '1' },
     });
 
     setTokens({ accessToken: data.accessToken });
@@ -423,6 +425,7 @@ logoutBtn.addEventListener('click', async () => {
     await requestJson(`${authBaseUrl}/logout`, {
       method: 'DELETE',
       credentials: 'include',
+      headers: { 'X-CSRF-Protection': '1' },
     });
   } catch {
     // Local cleanup should still happen if the refresh token is already invalid.
