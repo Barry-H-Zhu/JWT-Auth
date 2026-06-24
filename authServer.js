@@ -8,7 +8,10 @@ const jwt = require('jsonwebtoken');
 const db = require('./db');
 const bcrypt = require('bcrypt');
 const { redisClient, connectRedis } = require('./redisClient');
-const { sendVerificationEmail } = require('./emailService');
+const {
+    sendVerificationEmail,
+    sendPasswordResetEmail
+} = require('./emailService');
 const crypto = require('crypto');
 
 app.use(express.json());
@@ -49,6 +52,10 @@ const CHALLENGE_TTL_SECONDS = 10 * 60;
 const MAX_VERIFICATION_FAILURES = 3;
 const COOLDOWN_SECONDS = 5 * 60;
 const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
+
+const PASSWORD_RESET_TTL_SECONDS = 10 * 60;
+const MAX_PASSWORD_RESET_FAILURES = 3;
+const PASSWORD_RESET_COOLDOWN_SECONDS = 5 * 60;
 
 app.post('/token', requireCsrfHeader, async (req, res) => {
     const refreshToken = req.cookies.refreshToken;
@@ -296,6 +303,142 @@ app.post('/login/verify', async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: 'Could not verify login' });
+    }
+});
+
+app.post('/password-reset/request', async (req, res) => {
+    const { identifier } = req.body;
+
+    if (!identifier) {
+        return res.status(400).json({ message: 'identifier is required' });
+    }
+
+    try {
+        const [users] = await db.execute(
+            'SELECT id, username, email FROM users WHERE username = ? OR email = ?',
+            [identifier, identifier]
+        );
+
+        const userRecord = users[0];
+
+        if (!userRecord) {
+            return res.json({ message: 'If that account exists, a password reset code has been sent' });
+        }
+
+        const cooldownKey = `password_reset_cooldown:${userRecord.id}`;
+        const cooldownTtl = await redisClient.ttl(cooldownKey);
+
+        if (cooldownTtl > 0) {
+            return res.status(429).json({
+                message: `Too many password reset attempts. Try again in ${cooldownTtl} seconds.`
+            });
+        }
+
+        const resetCode = createVerificationCode();
+        const resetId = crypto.randomUUID();
+
+        const resetRequest = {
+            userId: userRecord.id,
+            username: userRecord.username,
+            hashedResetCode: hashVerificationCode(resetCode),
+            failureCount: 0,
+            createdAt: new Date().toISOString()
+        };
+
+        await redisClient.set(
+            `password_reset:${resetId}`,
+            JSON.stringify(resetRequest),
+            {
+                EX: PASSWORD_RESET_TTL_SECONDS
+            }
+        );
+
+        console.log(`Password reset code for ${userRecord.username}: ${resetCode}`);
+
+        await sendPasswordResetEmail(userRecord.email, resetCode);
+
+        res.json({
+            resetId: resetId,
+            message: 'If that account exists, a password reset code has been sent'
+        });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Could not request password reset' });
+    }
+});
+
+app.post('/password-reset/confirm', async (req, res) => {
+    const { resetId, resetCode, newPassword } = req.body;
+
+    if (!resetId || !resetCode || !newPassword) {
+        return res.status(400).json({
+            message: 'resetId, resetCode, and newPassword are required'
+        });
+    }
+
+    if (newPassword.length < 8) {
+        return res.status(400).json({
+            message: 'newPassword must be at least 8 characters'
+        });
+    }
+
+    try {
+        const resetKey = `password_reset:${resetId}`;
+        const resetJson = await redisClient.get(resetKey);
+
+        if (!resetJson) {
+            return res.status(400).json({ message: 'Password reset request is invalid or expired' });
+        }
+
+        const resetRequest = JSON.parse(resetJson);
+
+        const resetCodeMatches = hashVerificationCode(resetCode) === resetRequest.hashedResetCode;
+
+        if (!resetCodeMatches) {
+            resetRequest.failureCount += 1;
+
+            if (resetRequest.failureCount >= MAX_PASSWORD_RESET_FAILURES) {
+                await redisClient.del(resetKey);
+
+                await redisClient.set(
+                    `password_reset_cooldown:${resetRequest.userId}`,
+                    '1',
+                    {
+                        EX: PASSWORD_RESET_COOLDOWN_SECONDS
+                    }
+                );
+
+                return res.status(429).json({
+                    message: 'Too many password reset attempts. Try again later.'
+                });
+            }
+
+            await redisClient.set(
+                resetKey,
+                JSON.stringify(resetRequest),
+                {
+                    EX: PASSWORD_RESET_TTL_SECONDS
+                }
+            );
+
+            return res.status(401).json({ message: 'Invalid password reset code' });
+        }
+
+        const newPasswordHash = await bcrypt.hash(newPassword, 10);
+
+        await db.execute(
+            'UPDATE users SET password_hash = ? WHERE id = ?',
+            [newPasswordHash, resetRequest.userId]
+        );
+
+        await redisClient.del(resetKey);
+
+        res.json({ message: 'Password reset successfully' });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Could not reset password' });
     }
 });
 

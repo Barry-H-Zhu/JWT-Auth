@@ -8,15 +8,22 @@ const authView = document.querySelector('#authView');
 const appView = document.querySelector('#appView');
 const authForm = document.querySelector('#authForm');
 const verificationForm = document.querySelector('#verificationForm');
+const passwordResetForm = document.querySelector('#passwordResetForm');
 const postForm = document.querySelector('#postForm');
 const identifierInput = document.querySelector('#identifier');
 const usernameInput = document.querySelector('#username');
 const emailInput = document.querySelector('#email');
 const passwordInput = document.querySelector('#password');
 const verificationCodeInput = document.querySelector('#verificationCode');
+const resetIdentifierInput = document.querySelector('#resetIdentifier');
+const resetCodeInput = document.querySelector('#resetCode');
+const newPasswordInput = document.querySelector('#newPassword');
 const identifierField = document.querySelector('#identifierField');
 const usernameField = document.querySelector('#usernameField');
 const emailField = document.querySelector('#emailField');
+const resetIdentifierField = document.querySelector('#resetIdentifierField');
+const resetCodeField = document.querySelector('#resetCodeField');
+const newPasswordField = document.querySelector('#newPasswordField');
 const postTitleInput = document.querySelector('#postTitle');
 const accessTokenInput = document.querySelector('#accessToken');
 const refreshTokenInput = document.querySelector('#refreshToken');
@@ -32,8 +39,15 @@ const signInModeBtn = document.querySelector('#signInModeBtn');
 const registerModeBtn = document.querySelector('#registerModeBtn');
 const authSubmitBtn = document.querySelector('#authSubmitBtn');
 const challengeIdValue = document.querySelector('#challengeIdValue');
+const resetIdValue = document.querySelector('#resetIdValue');
 const cancelVerificationBtn = document.querySelector('#cancelVerificationBtn');
 const verifyLoginBtn = document.querySelector('#verifyLoginBtn');
+const forgotPasswordBtn = document.querySelector('#forgotPasswordBtn');
+const cancelPasswordResetBtn = document.querySelector('#cancelPasswordResetBtn');
+const passwordResetSubmitBtn = document.querySelector('#passwordResetSubmitBtn');
+const passwordResetTitle = document.querySelector('#passwordResetTitle');
+const passwordResetCopy = document.querySelector('#passwordResetCopy');
+const resetDebug = document.querySelector('#resetDebug');
 const postsBtn = document.querySelector('#postsBtn');
 const createPostBtn = document.querySelector('#createPostBtn');
 const refreshBtn = document.querySelector('#refreshBtn');
@@ -43,6 +57,8 @@ const clearBtn = document.querySelector('#clearBtn');
 let currentPosts = [];
 let authMode = 'sign-in';
 let pendingChallengeId = '';
+let passwordResetStep = 'request';
+let pendingResetId = '';
 
 function getTokens() {
   return {
@@ -101,9 +117,15 @@ function setAuthMode(mode) {
   const signingIn = mode === 'sign-in';
 
   pendingChallengeId = '';
+  pendingResetId = '';
   challengeIdValue.textContent = '';
+  resetIdValue.textContent = '';
   verificationCodeInput.value = '';
+  resetCodeInput.value = '';
+  newPasswordInput.value = '';
+  passwordResetStep = 'request';
   verificationForm.hidden = true;
+  passwordResetForm.hidden = true;
   authForm.hidden = false;
   document.querySelector('.auth-mode').hidden = false;
   identifierField.hidden = !signingIn;
@@ -113,6 +135,7 @@ function setAuthMode(mode) {
   usernameInput.required = !signingIn;
   emailInput.required = !signingIn;
   passwordInput.autocomplete = signingIn ? 'current-password' : 'new-password';
+  forgotPasswordBtn.hidden = !signingIn;
   signInModeBtn.classList.toggle('active', signingIn);
   registerModeBtn.classList.toggle('active', !signingIn);
   signInModeBtn.setAttribute('aria-selected', String(signingIn));
@@ -132,6 +155,33 @@ function showVerificationStep(challengeId, message) {
   document.querySelector('.auth-mode').hidden = true;
   showAuthMessage(`${message}. Enter the 6-digit code to finish signing in.`);
   verificationCodeInput.focus();
+}
+
+function showPasswordResetStep(step, message = '') {
+  passwordResetStep = step;
+  const requesting = step === 'request';
+
+  authForm.hidden = true;
+  verificationForm.hidden = true;
+  passwordResetForm.hidden = false;
+  document.querySelector('.auth-mode').hidden = true;
+
+  resetIdentifierField.hidden = !requesting;
+  resetCodeField.hidden = requesting;
+  newPasswordField.hidden = requesting;
+  resetIdentifierInput.required = requesting;
+  resetCodeInput.required = !requesting;
+  newPasswordInput.required = !requesting;
+  resetDebug.hidden = requesting || !pendingResetId;
+
+  passwordResetTitle.textContent = requesting ? 'Request a reset code' : 'Enter your reset code';
+  passwordResetCopy.textContent = requesting
+    ? 'Enter your username or email address. The reset code is sent to the account email.'
+    : 'Use the 6-digit code from your email or auth server console, then choose a new password.';
+  passwordResetSubmitBtn.textContent = requesting ? 'Send code' : 'Reset password';
+
+  showAuthMessage(message || 'Request a password reset code.');
+  (requesting ? resetIdentifierInput : resetCodeInput).focus();
 }
 
 function formatDate(value) {
@@ -338,6 +388,75 @@ verificationForm.addEventListener('submit', async (event) => {
 });
 
 cancelVerificationBtn.addEventListener('click', () => {
+  setAuthMode('sign-in');
+});
+
+forgotPasswordBtn.addEventListener('click', () => {
+  resetIdentifierInput.value = identifierInput.value.trim();
+  showPasswordResetStep('request');
+});
+
+passwordResetForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  passwordResetSubmitBtn.disabled = true;
+
+  if (passwordResetStep === 'request') {
+    showAuthMessage('Sending reset code...');
+
+    try {
+      const data = await requestJson(`${authBaseUrl}/password-reset/request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          identifier: resetIdentifierInput.value.trim(),
+        }),
+      });
+
+      pendingResetId = data.resetId || '';
+      resetIdValue.textContent = pendingResetId || 'No reset id returned for this account.';
+      showPasswordResetStep('confirm', `${data.message}. Enter the reset code to continue.`);
+    } catch (error) {
+      showAuthMessage(error.message, true);
+    } finally {
+      passwordResetSubmitBtn.disabled = false;
+    }
+
+    return;
+  }
+
+  if (!pendingResetId) {
+    showAuthMessage('Start the password reset process again.', true);
+    passwordResetSubmitBtn.disabled = false;
+    showPasswordResetStep('request');
+    return;
+  }
+
+  showAuthMessage('Resetting password...');
+
+  try {
+    const data = await requestJson(`${authBaseUrl}/password-reset/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        resetId: pendingResetId,
+        resetCode: resetCodeInput.value.trim(),
+        newPassword: newPasswordInput.value,
+      }),
+    });
+
+    identifierInput.value = resetIdentifierInput.value.trim();
+    passwordInput.value = '';
+    setAuthMode('sign-in');
+    showAuthMessage(`${data.message}. Sign in with your new password.`);
+    passwordInput.focus();
+  } catch (error) {
+    showAuthMessage(error.message, true);
+  } finally {
+    passwordResetSubmitBtn.disabled = false;
+  }
+});
+
+cancelPasswordResetBtn.addEventListener('click', () => {
   setAuthMode('sign-in');
 });
 

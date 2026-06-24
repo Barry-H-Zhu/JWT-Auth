@@ -12,8 +12,11 @@ The app runs as two servers:
 - Register with a unique username, unique email, and bcrypt-hashed password
 - Log in with either username or email
 - Receive a six-digit verification code by email and complete the challenge before receiving tokens
+- Request a password reset code by username or email and set a new password after verification
 - Store verification challenges and cooldown state in Redis
+- Store password reset challenges and cooldown state in Redis
 - Limit failed verification attempts and apply a five-minute cooldown
+- Limit failed password reset attempts and apply a five-minute cooldown
 - Use short-lived JWT access tokens for protected post routes
 - Store refresh-token sessions in Redis by a SHA-256 token hash
 - Deliver refresh tokens in HttpOnly cookies instead of exposing them to browser JavaScript
@@ -112,10 +115,12 @@ Redis uses key prefixes to separate data types:
 ```text
 login_challenge:<challengeId>
 login_cooldown:<userId>
+password_reset:<resetId>
+password_reset_cooldown:<userId>
 refresh_token:<sha256(refreshToken)>
 ```
 
-Challenge values contain the user id, username, hashed verification code, failure count, and creation time. Refresh-session values contain user metadata; the raw refresh token is not stored in Redis.
+Challenge values contain the user id, username, hashed verification or reset code, failure count, and creation time. Refresh-session values contain user metadata; the raw refresh token is not stored in Redis.
 
 Inspect refresh sessions with:
 
@@ -190,6 +195,17 @@ Because refresh and logout use browser cookies, those requests must also include
 
 The refresh cookie is shared by tabs on the same browser profile. A newly opened tab silently calls `/token` and restores the existing browser session. Use another browser profile or an incognito window to test two accounts at the same time.
 
+## Password Reset Flow
+
+1. `POST /password-reset/request` accepts a username or email identifier.
+2. If the account exists and is not cooling down, the auth server creates a Redis reset challenge.
+3. The reset code is emailed to the user's registered email address.
+4. The local reset code is also printed in the auth-server terminal for development.
+5. `POST /password-reset/confirm` validates the reset id, reset code, and new password.
+6. On success, the stored password hash is replaced and the Redis reset challenge is deleted.
+
+For account enumeration resistance, the request route returns the same generic success message whether or not the account exists.
+
 ## API Summary
 
 ### Register
@@ -240,6 +256,34 @@ The JSON response contains only the access token:
 ```
 
 The refresh token is delivered separately through a `Set-Cookie` response header with `HttpOnly` enabled.
+
+### Request Password Reset
+
+```http
+POST http://localhost:4000/password-reset/request
+Content-Type: application/json
+
+{
+  "identifier": "Barry"
+}
+```
+
+The identifier may be a username or email. If the account exists, the reset code is sent to the user's registered email address and is also printed in the auth-server terminal during local development. The response includes a `resetId` for the confirmation step.
+
+### Confirm Password Reset
+
+```http
+POST http://localhost:4000/password-reset/confirm
+Content-Type: application/json
+
+{
+  "resetId": "<resetId>",
+  "resetCode": "123456",
+  "newPassword": "newpassword123"
+}
+```
+
+The new password must be at least eight characters. After a successful reset, sign in with the new password and complete the normal login verification flow.
 
 ### Refresh Access Token
 
@@ -297,12 +341,23 @@ The VS Code REST Client keeps cookies returned by the auth server in its cookie 
 8. Run `DELETE /logout` without a body; keep the `X-CSRF-Protection: 1` header.
 9. Run `POST /token` again and expect `401 Unauthorized` because the cookie was cleared.
 
+To test password reset:
+
+1. Run `POST /password-reset/request`.
+2. Copy the returned reset id into `@resetId`.
+3. Copy the terminal reset code into `@resetCode`.
+4. Set `@newPassword` to the new password value.
+5. Run `POST /password-reset/confirm`.
+6. Sign in with the new password and complete verification.
+
 Keep only placeholders in `requests.rest`; do not commit real access tokens or verification codes.
 
 ## Security Notes
 
 - Passwords are stored as bcrypt hashes.
 - Verification codes are stored as SHA-256 hashes and expire automatically.
+- Password reset codes are stored as SHA-256 hashes and expire automatically.
+- Password reset responses avoid revealing whether an account exists.
 - Refresh tokens include a unique JWT ID (`jti`) so simultaneous logins create separate sessions.
 - Redis keys contain only a SHA-256 hash of each refresh token.
 - Refresh sessions are consumed atomically during rotation, so one old token cannot refresh twice.

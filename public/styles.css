@@ -247,7 +247,8 @@ textarea:focus {
 .primary-button,
 .secondary-button,
 .danger-button,
-.icon-button {
+.icon-button,
+.text-button {
   min-height: 40px;
   border: 1px solid transparent;
   border-radius: 8px;
@@ -259,7 +260,8 @@ textarea:focus {
 .primary-button:hover,
 .secondary-button:hover,
 .danger-button:hover,
-.icon-button:hover {
+.icon-button:hover,
+.text-button:hover {
   transform: translateY(-1px);
 }
 
@@ -291,6 +293,16 @@ textarea:focus {
   background: var(--surface-soft);
   border-color: var(--line);
   color: var(--muted);
+}
+
+.text-button {
+  justify-self: start;
+  min-height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--blue-dark);
+  font-size: 0.86rem;
 }
 
 .status-pill {

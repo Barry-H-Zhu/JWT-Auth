@@ -19,6 +19,16 @@ async function sendVerificationEmail(to, code) {
     });
 }
 
+async function sendPasswordResetEmail(to, code) {
+    await transporter.sendMail({
+        from: process.env.EMAIL_FROM,
+        to: to,
+        subject: 'Reset your JWT Auth password',
+        text: `Your password reset code is: ${code}\n\nThis code will expire in 10 minutes.`
+    });
+}
+
 module.exports = {
-    sendVerificationEmail
+    sendVerificationEmail,
+    sendPasswordResetEmail
 };
